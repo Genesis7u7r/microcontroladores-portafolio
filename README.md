@@ -25,3 +25,5 @@ Fuente: Datasheet oficial de Espressif (version 5.3)
 **Dudas para la clase: ** [¿?]
 ## Prácticas:
 - Práctica01-led
+- Simulacion en Wokwi: https://wokwi.com/projects/478056949641119745
+- 
