@@ -2,68 +2,74 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 
-// Definicion de pines
 const int LED1 = 2;
 const int LED2 = 4;
 
-// Tarea 1: LED integrado, nucleo 0
-void tareaLED1(void *parameter) {
-  for (;;) {
-    Serial.print("LED 1 ejecutandose en nucleo: ");
-    Serial.println(xPortGetCoreID());
+SemaphoreHandle_t turnoLed1;
+SemaphoreHandle_t turnoLed2;
 
-    digitalWrite(LED1, HIGH);
-    vTaskDelay(pdMS_TO_TICKS(500));
+// Tarea 1: nucleo 0
+void tareaLed1(void *pv) {
+    pinMode(LED1, OUTPUT);
+    bool estado = false;
 
-    digitalWrite(LED1, LOW);
-    vTaskDelay(pdMS_TO_TICKS(500));
-  }
+    for (;;) {
+        xSemaphoreTake(turnoLed1, portMAX_DELAY);
+
+        estado = !estado;
+        digitalWrite(LED1, estado);
+
+        Serial.printf("LED 1 ejecutandose en nucleo: %d\n",
+                      xPortGetCoreID());
+
+        xSemaphoreGive(turnoLed2);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
 }
 
-// Tarea 2: LED externo, nucleo 1
-void tareaLED2(void *parameter) {
-  for (;;) {
-    Serial.print("LED 2 ejecutandose en nucleo: ");
-    Serial.println(xPortGetCoreID());
+// Tarea 2: nucleo 1
+void tareaLed2(void *pv) {
+    pinMode(LED2, OUTPUT);
+    bool estado = false;
 
-    digitalWrite(LED2, HIGH);
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    for (;;) {
+        xSemaphoreTake(turnoLed2, portMAX_DELAY);
 
-    digitalWrite(LED2, LOW);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-  }
+        estado = !estado;
+        digitalWrite(LED2, estado);
+
+        Serial.printf("LED 2 ejecutandose en nucleo: %d\n",
+                      xPortGetCoreID());
+
+        xSemaphoreGive(turnoLed1);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }
 
 void setup() {
-  Serial.begin(115200);
+    Serial.begin(115200);
+    delay(500);
 
-  pinMode(LED1, OUTPUT);
-  pinMode(LED2, OUTPUT);
+    turnoLed1 = xSemaphoreCreateBinary();
+    turnoLed2 = xSemaphoreCreateBinary();
 
-  // Crear tarea LED1 en nucleo 0
-  xTaskCreatePinnedToCore(
-    tareaLED1,
-    "Tarea LED 1",
-    2048,
-    NULL,
-    1,
-    NULL,
-    0
-  );
+    if (turnoLed1 == NULL || turnoLed2 == NULL) {
+        Serial.println("Error al crear semaforos");
+        return;
+    }
 
-  // Crear tarea LED2 en nucleo 1
-  xTaskCreatePinnedToCore(
-    tareaLED2,
-    "Tarea LED 2",
-    2048,
-    NULL,
-    1,
-    NULL,
-    1
-  );
+    xTaskCreatePinnedToCore(
+        tareaLed1, "Led1", 2048, NULL, 1, NULL, 0
+    );
+
+    xTaskCreatePinnedToCore(
+        tareaLed2, "Led2", 2048, NULL, 1, NULL, 1
+    );
+
+    xSemaphoreGive(turnoLed1);
 }
 
 void loop() {
-  // Las tareas se ejecutan mediante FreeRTOS
 }
